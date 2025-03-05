@@ -1,3 +1,5 @@
+const API_BASE_URL = "https://polomarathonregistration.bhoganmediasoft.com/api"; // Use HTTPS
+
 const registrationForm = document.getElementById("registrationForm");
 
 registrationForm.addEventListener("submit", async (e) => {
@@ -13,16 +15,16 @@ registrationForm.addEventListener("submit", async (e) => {
   };
 
   try {
-    // Fetch the Razorpay Key from the backend
-    const keyResponse = await fetch("http://localhost:3000/get-razorpay-key");
+    console.log("🔄 Fetching Razorpay Key...");
+    const keyResponse = await fetch(`${API_BASE_URL}/get-razorpay-key`);
     const { key } = await keyResponse.json();
 
-    const orderResponse = await fetch("http://localhost:3000/createOrder", {
+    const orderResponse = await fetch(`${API_BASE_URL}/createOrder`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount: 1 }),
+      body: JSON.stringify({ amount: 499 }),
     });
-    
+
     const order = await orderResponse.json();
     if (!order.id) {
       alert("Error creating order. Please try again.");
@@ -30,7 +32,7 @@ registrationForm.addEventListener("submit", async (e) => {
     }
 
     const options = {
-      key: key, // Dynamically fetched Razorpay key
+      key: key,
       amount: order.amount,
       currency: "INR",
       name: "Polo Marathon",
@@ -42,8 +44,8 @@ registrationForm.addEventListener("submit", async (e) => {
           alert("Payment failed or cancelled. Please try again.");
           return;
         }
-        
-        const saveResponse = await fetch("http://localhost:3000/api/auth/register", {
+
+        const saveResponse = await fetch(`${API_BASE_URL}/auth/register`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
