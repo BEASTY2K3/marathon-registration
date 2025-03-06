@@ -3,6 +3,7 @@ const { body, validationResult } = require("express-validator");
 const Razorpay = require("razorpay");
 const crypto = require("crypto");
 const User = require("../models/User");
+const Payment = require("../models/Payment");
 const nodemailer = require("nodemailer");
 
 const router = express.Router();
@@ -34,21 +35,7 @@ const sendConfirmationEmail = async (user) => {
       from: process.env.EMAIL_USER,
       to: user.email,
       subject: "Polo Marathon Registration Confirmation",
-      text: `
-Hello ${user.name},
-
-Thank you for registering for the Polo Marathon!
-
-✅ Your Chest Number: ${user.chestNumber}
-
-Event Details:
-- Date: 16-03-2025
-- Venue: MOLAPALAYAM, Coimbatore
-
-See you at the event!
-
-Warm Regards,
-Polo Marathon Team`,
+      text: `Hello ${user.name},\n\nYour registration for the Polo Marathon is confirmed!\nYour Chest Number: ${user.chestNumber}\n\nThank you!`,
     };
 
     await transporter.sendMail(mailOptions);
@@ -58,100 +45,62 @@ Polo Marathon Team`,
   }
 };
 
-// 1️⃣ Create Razorpay Order
-router.post("/createOrder", async (req, res) => {
+// ✅ Razorpay Payment Verification Route
+router.post("/payment/verify", async (req, res) => {
   try {
-    const { amount } = req.body;
+    const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
+    const secret = process.env.RAZORPAY_KEY_SECRET;
 
-    const options = {
-      amount: amount * 100, // Razorpay uses paise
-      currency: "INR",
-      receipt: `order_rcptid_${Date.now()}`,
-    };
+    // Validate Razorpay signature
+    const expectedSignature = crypto.createHmac("sha256", secret)
+      .update(razorpay_order_id + "|" + razorpay_payment_id)
+      .digest("hex");
 
-    const order = await razorpay.orders.create(options);
-    console.log("🛒 Order Created:", order);
-    res.status(200).json(order);
+    if (expectedSignature !== razorpay_signature) {
+      console.error("❌ Payment verification failed: Invalid signature");
+      return res.status(400).json({ success: false, message: "Payment verification failed" });
+    }
+
+    // ✅ Save Payment Status in Database
+    const payment = new Payment({ orderId: razorpay_order_id, paymentId: razorpay_payment_id, status: "success" });
+    await payment.save();
+    console.log("✅ Payment verified and saved:", payment);
+
+    res.status(200).json({ success: true, message: "Payment verified" });
   } catch (error) {
-    console.error("❌ Error creating Razorpay order:", error);
-    res.status(500).json({ msg: "Error creating order", error: error.message });
+    console.error("❌ Payment Verification Error:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
 });
 
-// 2️⃣ Register User (After Payment Verification)
-router.post(
-  "/register",
-  [
-    body("name").notEmpty().withMessage("Name is required"),
-    body("email").isEmail().withMessage("Valid email is required"),
-    body("phone").isLength({ min: 10, max: 10 }).withMessage("Valid phone number is required"),
-    body("paymentId").notEmpty().withMessage("Payment ID is required"),
-    body("orderId").notEmpty().withMessage("Order ID is required"),
-    body("signature").notEmpty().withMessage("Signature is required"),
-  ],
-  async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
-
-    try {
-      const { name, email, phone, age, gender, category, paymentId, orderId, signature } = req.body;
-
-      // Log incoming data
-      console.log("🔍 Incoming Registration Data:", req.body);
-
-      if (!paymentId || paymentId === "N/A") {
-        return res.status(400).json({ msg: "Invalid Payment ID. Registration failed." });
-      }
-
-      // ✅ Verify Razorpay Signature
-      const generatedSignature = crypto
-        .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-        .update(orderId + "|" + paymentId)
-        .digest("hex");
-
-      if (generatedSignature !== signature) {
-        console.error("❌ Invalid Signature:", { generatedSignature, signature });
-        return res.status(400).json({ msg: "Payment verification failed: Invalid signature." });
-      }
-
-      // ✅ Fetch and Check Payment Status
-      const payment = await razorpay.payments.fetch(paymentId);
-      console.log("🔎 Payment Status:", payment.status);
-
-      if (payment.status !== "captured") {
-        return res.status(400).json({ msg: "Payment verification failed: Payment not captured." });
-      }
-
-      // ✅ Generate Chest Number
-      const chestNumber = await getNextChestNumber();
-
-      // ✅ Save User Data in Database
-      const newUser = new User({
-        name,
-        email,
-        phone,
-        age,
-        gender,
-        category,
-        paymentId,
-        chestNumber,
-      });
-
-      await newUser.save();
-      console.log("✅ User Registered Successfully:", newUser);
-
-      // ✅ Send Confirmation Email
-      await sendConfirmationEmail(newUser);
-
-      return res.status(201).json({
-        msg: "User registered successfully after payment.",
-        chestNumber: newUser.chestNumber,
-      });
-    } catch (error) {
-      console.error("❌ Error saving user or sending email:", error);
-      res.status(500).json({ msg: "Server error", error: error.message });
+// ✅ Register User After Successful Payment
+router.post("/register", async (req, res) => {
+  try {
+    const { name, email, phone, age, gender, category, paymentId, orderId } = req.body;
+    
+    // ✅ Check if Payment Exists and is Verified
+    const payment = await Payment.findOne({ orderId, paymentId });
+    if (!payment || payment.status !== "success") {
+      console.error("❌ Payment verification failed or not found in DB");
+      return res.status(400).json({ msg: "Payment not verified. Registration failed." });
     }
+    
+    // ✅ Generate Chest Number
+    const chestNumber = await getNextChestNumber();
+    
+    // ✅ Save User Data in Database
+    const newUser = new User({ name, email, phone, age, gender, category, paymentId, chestNumber });
+    await newUser.save();
+    console.log("✅ User Registered Successfully:", newUser);
+    
+    // ✅ Send Confirmation Email
+    await sendConfirmationEmail(newUser);
+    
+    res.status(201).json({ msg: "User registered successfully after payment.", chestNumber: newUser.chestNumber });
+  } catch (error) {
+    console.error("❌ Error registering user:", error);
+    res.status(500).json({ msg: "Server error", error: error.message });
   }
-);
+});
 
 module.exports = router;

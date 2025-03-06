@@ -1,7 +1,7 @@
-const registrationForm = document.getElementById("registrationForm");
+const API_BASE_URL = "http://82.112.235.192:3000"; // Use the correct backend URL
 
-registrationForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
+document.getElementById("registrationForm").addEventListener("submit", async (e) => {
+  e.preventDefault(); // ✅ Prevent default form submission
 
   const formData = {
     name: document.getElementById("name").value.trim(),
@@ -13,24 +13,28 @@ registrationForm.addEventListener("submit", async (e) => {
   };
 
   try {
-    // Fetch the Razorpay Key from the backend
-    const keyResponse = await fetch("https://polomarathonregistration.bhoganmediasoft.com/api/get-razorpay-key");
+    console.log("🔄 Fetching Razorpay Key...");
+    const keyResponse = await fetch(`${API_BASE_URL}/get-razorpay-key`);
+    if (!keyResponse.ok) throw new Error("Failed to fetch Razorpay key");
     const { key } = await keyResponse.json();
 
-    const orderResponse = await fetch("https://polomarathonregistration.bhoganmediasoft.com/api/createOrder", {
+    console.log("🔄 Creating Order...");
+    const orderResponse = await fetch(`${API_BASE_URL}/createOrder`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount: 1 }),
+      body: JSON.stringify({ amount: 499 }), // Adjust amount if needed
     });
-    
+
     const order = await orderResponse.json();
     if (!order.id) {
       alert("Error creating order. Please try again.");
       return;
     }
 
+    console.log("✅ Order Created:", order);
+
     const options = {
-      key: key, // Dynamically fetched Razorpay key
+      key: key,
       amount: order.amount,
       currency: "INR",
       name: "Polo Marathon",
@@ -42,8 +46,9 @@ registrationForm.addEventListener("submit", async (e) => {
           alert("Payment failed or cancelled. Please try again.");
           return;
         }
-        
-        const saveResponse = await fetch("https://polomarathonregistration.bhoganmediasoft.com/api/auth/register", {
+
+        console.log("🔄 Sending Registration Data...");
+        const saveResponse = await fetch(`${API_BASE_URL}/api/auth/register`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -59,8 +64,9 @@ registrationForm.addEventListener("submit", async (e) => {
           alert("Registration failed: " + result.msg);
           return;
         }
+
         alert("🎉 Registration and Payment Successful!");
-        registrationForm.reset();
+        document.getElementById("registrationForm").reset();
       },
       prefill: {
         name: formData.name,
