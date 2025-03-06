@@ -15,19 +15,11 @@ registrationForm.addEventListener("submit", async (e) => {
   };
 
   try {
-<<<<<<< HEAD
-    // Fetch the Razorpay Key from the backend
-    const keyResponse = await fetch("https://polomarathonregistration.bhoganmediasoft.com/api/get-razorpay-key");
-    const { key } = await keyResponse.json();
-
-    const orderResponse = await fetch("https://polomarathonregistration.bhoganmediasoft.com/api/createOrder", {
-=======
     console.log("🔄 Fetching Razorpay Key...");
     const keyResponse = await fetch(`${API_BASE_URL}/get-razorpay-key`);
     const { key } = await keyResponse.json();
 
     const orderResponse = await fetch(`${API_BASE_URL}/createOrder`, {
->>>>>>> e884fe153a39e39e596c47e0ef6e446f3f3a929d
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ amount: 499 }),
@@ -52,13 +44,8 @@ registrationForm.addEventListener("submit", async (e) => {
           alert("Payment failed or cancelled. Please try again.");
           return;
         }
-<<<<<<< HEAD
-        
-        const saveResponse = await fetch("https://polomarathonregistration.bhoganmediasoft.com/api/auth/register", {
-=======
 
         const saveResponse = await fetch(`${API_BASE_URL}/auth/register`, {
->>>>>>> e884fe153a39e39e596c47e0ef6e446f3f3a929d
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
