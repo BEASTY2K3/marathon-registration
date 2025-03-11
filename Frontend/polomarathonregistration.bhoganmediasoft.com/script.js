@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://82.112.235.192:3000"; // Use the correct backend URL
+const API_BASE_URL = "http://marathonapi.bhoganmediasoft.com/api";
 
 document.getElementById("registrationForm").addEventListener("submit", async (e) => {
   e.preventDefault(); // ✅ Prevent default form submission
