@@ -1,4 +1,4 @@
-const API_BASE_URL = "http://82.112.235.192/api";
+const API_BASE_URL = "http://82.112.235.192:3000/api";
 
 const registrationForm = document.getElementById("registrationForm");
 
